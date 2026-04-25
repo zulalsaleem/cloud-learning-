@@ -12,7 +12,7 @@ Goal: Master cloud infrastructure and DevOps
 
 ### Week 1: Foundations
 
-#### Day 1 - [Date]
+#### Day 1 
 **Topics Covered:**
 - Cloud computing concepts (IaaS, PaaS, SaaS)
 - Docker vs Virtual Machines
@@ -40,33 +40,26 @@ Goal: Master cloud infrastructure and DevOps
 - Deploy simple server
 
 ---
+ 
+### Day 2 - 24 April 2026 ✅
 
-#### Day 2 - [Date]
-[Will update tomorrow]
+**What I Built:**
+- REST API with 4 endpoints
+- Running live at http://155.248.254.15:3000/todos
 
----
+**Topics Learned:**
+- Node.js and npm
+- Express framework
+- HTTP methods (GET, POST, DELETE)
+- JSON format
+- Firewall configuration
+- curl for API testing
 
-## Projects
+**Problems Solved:**
+- nano editor didn't save → Used VS Code instead
+- File named index.jss → Renamed to index.js
 
-### Project 1: n8n Automation Platform ✅
-- **Status:** Completed
-- **Technologies:** Docker, Docker Compose, Ubuntu, n8n
-- **Live URL:** http://YOUR_IP:5678
-- **GitHub:** [Link when you upload]
-- **What I Learned:** 
-  - Docker containerization
-  - Port mapping
-  - Volume persistence
-  - Firewall configuration
-
----
-
-### Project 2: REST API with Database
-- **Status:** Planning
-- **Technologies:** Node.js, Express, SQLite, Docker
-- **Start Date:** Day 2
-
----
+**Time Spent:** 3+ hours
 
 ## Skills Acquired
 
@@ -80,7 +73,33 @@ Goal: Master cloud infrastructure and DevOps
 
 ---
 
-## Resources
+
+### Day 3 - 25 April 2026 ✅
+
+**What I Built:**
+- Added SQLite database to REST API
+- Data now survives server restarts permanently
+
+**Topics Learned:**
+- SQLite database
+- SQL commands (SELECT, INSERT, UPDATE, DELETE)
+- Data persistence vs in-memory storage
+- try/catch error handling
+- Input validation
+- Looking inside database with sqlite3 tool
+- Separation of concerns (database.js vs index.js)
+
+**Problems Solved:**
+- Data was resetting on restart → Fixed with SQLite
+
+**Key Insight:**
+- Day 2: Data lived in RAM (whiteboard)
+- Day 3: Data lives in file (notebook)
+- Real apps ALWAYS use databases!
+
+**Time Spent:** 2+ hours
+
+
 
 ### Official Documentation
 - [Docker Docs](https://docs.docker.com)
