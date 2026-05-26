@@ -1,58 +1,26 @@
 pipeline {
 
-    // Run on any available agent
-    // In our setup: Jenkins master IS the agent
     agent any
 
-    // ─────────────────────────────────────────
-    // ENVIRONMENT VARIABLES
-    // Available in ALL stages below
-    // ─────────────────────────────────────────
     environment {
         APP_NAME     = 'todo-api'
         NODE_VERSION = '20'
-
-        // Image tagged with build number!
-        // todo-api:1, todo-api:2, todo-api:3...
-        // Each build has unique traceable image!
         DOCKER_IMAGE = "todo-api:${BUILD_NUMBER}"
-
         ORACLE_HOST  = '155.248.254.15'
         ORACLE_USER  = 'ubuntu'
         APP_DIR      = '/home/ubuntu/todo-app'
     }
 
-    // ─────────────────────────────────────────
-    // TRIGGERS — When to automatically run
-    // ─────────────────────────────────────────
     triggers {
-        // Poll GitHub every 5 minutes
-        // H = hash-based timing (spreads load)
-        // Backup to webhooks
         pollSCM('H/5 * * * *')
     }
 
-    // ─────────────────────────────────────────
-    // OPTIONS — How the pipeline behaves
-    // ─────────────────────────────────────────
     options {
-        // Kill build after 30 minutes
-        // Prevents hung builds wasting resources!
         timeout(time: 30, unit: 'MINUTES')
-
-        // Only keep last 10 builds
-        // Saves disk space on server!
         buildDiscarder(logRotator(numToKeepStr: '10'))
-
-        // Don't run two builds simultaneously
-        // Prevents race conditions!
         disableConcurrentBuilds()
     }
 
-    // ─────────────────────────────────────────
-    // STAGES — The actual work
-    // Run sequentially (one after another)
-    // ─────────────────────────────────────────
     stages {
 
         // ─────────────────────────────────────
@@ -64,10 +32,8 @@ pipeline {
                 echo "📥 STAGE 1: Checking out source code"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                // checkout scm = use the repo configured in job
                 checkout scm
 
-                // Show what we got (great for debugging!)
                 sh '''
                     echo "Branch: $(git branch --show-current)"
                     echo "Commit: $(git log --oneline -1)"
@@ -86,12 +52,14 @@ pipeline {
                 echo "📦 STAGE 2: Installing dependencies"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                sh '''
-                    node --version
-                    npm --version
-                    npm ci
-                    echo "✅ Dependencies installed"
-                '''
+                dir('todo-frontend') {
+                    sh '''
+                        node --version
+                        npm --version
+                        npm ci
+                        echo "✅ Dependencies installed"
+                    '''
+                }
             }
         }
 
@@ -104,16 +72,17 @@ pipeline {
                 echo "🔒 STAGE 3: Security audit"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                sh '''
-                    npm audit --audit-level=high || true
-                    echo "✅ Security audit complete"
-                '''
+                dir('todo-frontend') {
+                    sh '''
+                        npm audit --audit-level=high || true
+                        echo "✅ Security audit complete"
+                    '''
+                }
             }
         }
 
         // ─────────────────────────────────────
-        // STAGE 4: Run tests — THE GATE!
-        // If this fails → everything stops!
+        // STAGE 4: Run tests
         // ─────────────────────────────────────
         stage('Run Tests') {
             steps {
@@ -121,18 +90,19 @@ pipeline {
                 echo "🧪 STAGE 4: Running automated tests"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                sh '''
-                    export JWT_SECRET=jenkins_test_secret_key
-                    export JWT_EXPIRES_IN=1h
-                    export NODE_ENV=test
+                dir('todo-frontend') {
+                    sh '''
+                        export JWT_SECRET=jenkins_test_secret_key
+                        export JWT_EXPIRES_IN=1h
+                        export NODE_ENV=test
 
-                    npm test
+                        npm test
 
-                    echo "✅ All tests passed"
-                '''
+                        echo "✅ All tests passed"
+                    '''
+                }
             }
 
-            // Post steps for THIS stage only
             post {
                 success {
                     echo "✅ Tests PASSED — proceeding to build"
@@ -145,7 +115,6 @@ pipeline {
 
         // ─────────────────────────────────────
         // STAGE 5: Build Docker image
-        // Tagged with build number for traceability
         // ─────────────────────────────────────
         stage('Build Docker Image') {
             steps {
@@ -153,24 +122,23 @@ pipeline {
                 echo "🐳 STAGE 5: Building Docker image"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                sh '''
-                    docker build -t ${DOCKER_IMAGE} .
-                    docker build -t ${APP_NAME}:latest .
+                dir('todo-frontend') {
+                    sh '''
+                        docker build -t ${DOCKER_IMAGE} .
+                        docker build -t ${APP_NAME}:latest .
 
-                    echo "✅ Docker image built: ${DOCKER_IMAGE}"
-                    docker images ${APP_NAME}
-                '''
+                        echo "✅ Docker image built: ${DOCKER_IMAGE}"
+                        docker images ${APP_NAME}
+                    '''
+                }
             }
         }
 
         // ─────────────────────────────────────
-        // STAGE 6: Deploy
-        // ONLY runs on main branch!
+        // STAGE 6: Deploy (main branch only)
         // ─────────────────────────────────────
         stage('Deploy to Production') {
 
-            // when block = conditional execution!
-            // Skip this stage on feature branches!
             when {
                 branch 'main'
             }
@@ -180,8 +148,6 @@ pipeline {
                 echo "🚀 STAGE 6: Deploying to Oracle Cloud"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                // sshagent = injects SSH key from credentials store
-                // Jenkins securely handles the key!
                 sshagent(credentials: ['oracle-ssh-key']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=no \
@@ -238,20 +204,17 @@ DEPLOY_SCRIPT
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                 echo "📊 STAGE 7: Build Summary"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                sh '''
-                    echo "Build Number: ${BUILD_NUMBER}"
-                    echo "Git Branch:   ${GIT_BRANCH}"
-                    echo "Git Commit:   ${GIT_COMMIT}"
-                    echo "Build URL:    ${BUILD_URL}"
-                    echo "Result:       SUCCESS"
-                '''
+                echo "Build Number: ${BUILD_NUMBER}"
+                echo "Git Branch:   ${env.GIT_BRANCH}"
+                echo "Git Commit:   ${env.GIT_COMMIT}"
+                echo "Build URL:    ${env.BUILD_URL}"
+                echo "Result:       SUCCESS"
             }
         }
     }
 
     // ─────────────────────────────────────────
     // POST — Runs after ALL stages complete
-    // Regardless of success or failure!
     // ─────────────────────────────────────────
     post {
         success {
@@ -269,9 +232,7 @@ DEPLOY_SCRIPT
 
         always {
             echo "🧹 Cleaning up..."
-            // Remove test files
             sh 'rm -f .env .env.test || true'
-            // Clean dangling Docker images (saves disk space!)
             sh 'docker image prune -f || true'
         }
     }
