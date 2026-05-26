@@ -6,6 +6,9 @@ pipeline {
         APP_NAME     = 'todo-api'
         NODE_VERSION = '20'
         DOCKER_IMAGE = "todo-api:${BUILD_NUMBER}"
+        ORACLE_HOST  = '155.248.254.15'
+        ORACLE_USER  = 'ubuntu'
+        APP_DIR      = '/home/ubuntu/todo-app'
     }
 
     triggers {
@@ -20,205 +23,140 @@ pipeline {
 
     stages {
 
-        // ─────────────────────────────────────
-        // STAGE 1: Get the code
-        // ─────────────────────────────────────
         stage('Checkout') {
             steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "📥 STAGE 1: Checking out source code"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
+                echo "STAGE 1: Checking out source code"
                 checkout scm
-
                 sh '''
                     echo "Branch: $(git branch --show-current)"
                     echo "Commit: $(git log --oneline -1)"
-                    echo "Author: $(git log --format='%an' -1)"
-                    echo "Date:   $(git log --format='%ai' -1)"
                 '''
             }
         }
 
-        // ─────────────────────────────────────
-        // STAGE 2: Install packages
-        // ─────────────────────────────────────
         stage('Install Dependencies') {
             steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "📦 STAGE 2: Installing dependencies"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-                dir('todo-frontend') {
-                    sh '''
-                        node --version
-                        npm --version
-                        npm ci
-                        echo "✅ Dependencies installed"
-                    '''
-                }
-            }
-        }
-
-        // ─────────────────────────────────────
-        // STAGE 3: Security check
-        // ─────────────────────────────────────
-        stage('Security Audit') {
-            steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "🔒 STAGE 3: Security audit"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-                dir('todo-frontend') {
-                    sh '''
-                        npm audit --audit-level=high || true
-                        echo "✅ Security audit complete"
-                    '''
-                }
-            }
-        }
-
-        // ─────────────────────────────────────
-        // STAGE 4: Run tests
-        // ─────────────────────────────────────
-        stage('Run Tests') {
-            steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "🧪 STAGE 4: Running automated tests"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-                dir('todo-frontend') {
-                    sh '''
-                        export JWT_SECRET=jenkins_test_secret_key
-                        export JWT_EXPIRES_IN=1h
-                        export NODE_ENV=test
-
-                        npm test
-
-                        echo "✅ All tests passed"
-                    '''
-                }
-            }
-
-            post {
-                success {
-                    echo "✅ Tests PASSED — proceeding to build"
-                }
-                failure {
-                    echo "❌ Tests FAILED — blocking deployment"
-                }
-            }
-        }
-
-        // ─────────────────────────────────────
-        // STAGE 5: Build Docker image
-        // ─────────────────────────────────────
-        stage('Build Docker Image') {
-            steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "🐳 STAGE 5: Building Docker image"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-                dir('todo-frontend') {
-                    sh '''
-                        docker build -t ${DOCKER_IMAGE} .
-                        docker build -t ${APP_NAME}:latest .
-
-                        echo "✅ Docker image built: ${DOCKER_IMAGE}"
-                        docker images ${APP_NAME}
-                    '''
-                }
-            }
-        }
-
-        // ─────────────────────────────────────
-        // STAGE 6: Deploy (always runs)
-        // Jenkins and Oracle Cloud = same server
-        // No SSH needed — run Docker directly!
-        // ─────────────────────────────────────
-        stage('Deploy to Production') {
-
-            when {
-                expression { return true }
-            }
-
-            steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "🚀 STAGE 6: Deploying to Oracle Cloud"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
+                echo "STAGE 2: Installing dependencies"
                 sh '''
-                    echo "🛑 Stopping old container (if running)..."
-                    docker stop todo-frontend || true
-                    docker rm todo-frontend || true
-
-                    echo "🚀 Starting new container..."
-                    docker run -d \
-                        --name todo-frontend \
-                        --restart unless-stopped \
-                        -p 80:80 \
-                        todo-api:latest
-
-                    echo "⏳ Waiting for startup..."
-                    sleep 5
-
-                    echo "🔍 Verifying deployment..."
-                    docker ps | grep todo-frontend && echo "✅ Container is running!" || echo "❌ Container not found!"
-
-                    echo "📋 Container logs (last 10 lines):"
-                    docker logs todo-frontend --tail=10
+                    node --version
+                    npm --version
+                    npm ci
+                    echo "Dependencies installed successfully"
                 '''
             }
+        }
 
-            post {
-                success {
-                    echo "✅ DEPLOYMENT SUCCESSFUL — Build #${BUILD_NUMBER}"
-                    echo "🌐 App is live at: http://155.248.254.15"
-                }
-                failure {
-                    echo "❌ DEPLOYMENT FAILED — Build #${BUILD_NUMBER}"
-                }
+        stage('Security Audit') {
+            steps {
+                echo "STAGE 3: Security audit"
+                sh '''
+                    npm audit --audit-level=high || true
+                    echo "Security audit complete"
+                '''
             }
         }
 
-        // ─────────────────────────────────────
-        // STAGE 7: Summary
-        // ─────────────────────────────────────
+        stage('Run Tests') {
+            steps {
+                echo "STAGE 4: Running automated tests"
+                sh '''
+                    export JWT_SECRET=jenkins_test_secret_key
+                    export JWT_EXPIRES_IN=1h
+                    export NODE_ENV=test
+                    npm test
+                    echo "All tests passed"
+                '''
+            }
+            post {
+                success { echo "Tests PASSED - proceeding to build" }
+                failure { echo "Tests FAILED - blocking deployment" }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo "STAGE 5: Building Docker image"
+                sh '''
+                    docker build -t ${DOCKER_IMAGE} .
+                    docker build -t ${APP_NAME}:latest .
+                    echo "Docker image built: ${DOCKER_IMAGE}"
+                    docker images ${APP_NAME}
+                '''
+            }
+        }
+
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo "STAGE 6: Deploying to Oracle Cloud"
+                sshagent(credentials: ['oracle-ssh-key']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no \
+                            ${ORACLE_USER}@${ORACLE_HOST} \
+                            bash << DEPLOY_SCRIPT
+
+                            set -e
+                            echo "Deployment starting..."
+                            echo "Time: \$(date)"
+
+                            cd /home/ubuntu/todo-app
+
+                            echo "Pulling latest code..."
+                            git pull origin main
+
+                            echo "Rebuilding containers..."
+                            docker compose up -d --build
+
+                            echo "Waiting for startup..."
+                            sleep 15
+
+                            echo "Verifying deployment..."
+                            HEALTH=\$(curl -sf http://localhost/api/health || echo "FAILED")
+
+                            if echo "\$HEALTH" | grep -q "ok"; then
+                                echo "Deployment successful!"
+                                docker compose ps
+                            else
+                                echo "Health check failed!"
+                                docker compose logs --tail=20
+                                exit 1
+                            fi
+
+DEPLOY_SCRIPT
+                    '''
+                }
+            }
+            post {
+                success { echo "DEPLOYMENT SUCCESSFUL - Build #${BUILD_NUMBER}" }
+                failure { echo "DEPLOYMENT FAILED - Build #${BUILD_NUMBER}" }
+            }
+        }
+
         stage('Summary') {
             steps {
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "📊 STAGE 7: Build Summary"
-                echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                echo "Build Number: ${BUILD_NUMBER}"
-                echo "Git Branch:   ${env.GIT_BRANCH}"
-                echo "Git Commit:   ${env.GIT_COMMIT}"
-                echo "Build URL:    ${env.BUILD_URL}"
-                echo "Live URL:     http://155.248.254.15"
-                echo "Result:       SUCCESS"
+                echo "STAGE 7: Build Summary"
+                sh '''
+                    echo "Build Number: ${BUILD_NUMBER}"
+                    echo "Git Branch:   ${GIT_BRANCH}"
+                    echo "Git Commit:   ${GIT_COMMIT}"
+                    echo "Live URL:     http://155.248.254.15"
+                    echo "Result:       SUCCESS"
+                '''
             }
         }
     }
 
-    // ─────────────────────────────────────────
-    // POST — Runs after ALL stages complete
-    // ─────────────────────────────────────────
     post {
         success {
-            echo "🎉 Pipeline completed successfully!"
-            echo "🌐 Todo app is live at: http://155.248.254.15"
+            echo "Pipeline completed successfully!"
         }
-
         failure {
-            echo "💥 Pipeline FAILED! Check logs above."
-            echo "Build URL: ${env.BUILD_URL}"
+            echo "Pipeline FAILED! Check logs above."
         }
-
-        unstable {
-            echo "⚠️ Pipeline unstable — check warnings"
-        }
-
         always {
-            echo "🧹 Cleaning up..."
+            echo "Cleaning up..."
             sh 'rm -f .env .env.test || true'
             sh 'docker image prune -f || true'
         }
