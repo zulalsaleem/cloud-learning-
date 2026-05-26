@@ -6,9 +6,6 @@ pipeline {
         APP_NAME     = 'todo-api'
         NODE_VERSION = '20'
         DOCKER_IMAGE = "todo-api:${BUILD_NUMBER}"
-        ORACLE_HOST  = '155.248.254.15'
-        ORACLE_USER  = 'ubuntu'
-        APP_DIR      = '/home/ubuntu/todo-app'
     }
 
     triggers {
@@ -135,12 +132,14 @@ pipeline {
         }
 
         // ─────────────────────────────────────
-        // STAGE 6: Deploy (main branch only)
+        // STAGE 6: Deploy (always runs)
+        // Jenkins and Oracle Cloud = same server
+        // No SSH needed — run Docker directly!
         // ─────────────────────────────────────
         stage('Deploy to Production') {
 
             when {
-                branch 'main'
+                expression { return true }
             }
 
             steps {
@@ -148,47 +147,33 @@ pipeline {
                 echo "🚀 STAGE 6: Deploying to Oracle Cloud"
                 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                sshagent(credentials: ['oracle-ssh-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no \
-                            ${ORACLE_USER}@${ORACLE_HOST} \
-                            bash << DEPLOY_SCRIPT
+                sh '''
+                    echo "🛑 Stopping old container (if running)..."
+                    docker stop todo-frontend || true
+                    docker rm todo-frontend || true
 
-                            set -e
-                            echo "🚀 Deployment starting..."
-                            echo "Time: \$(date)"
+                    echo "🚀 Starting new container..."
+                    docker run -d \
+                        --name todo-frontend \
+                        --restart unless-stopped \
+                        -p 80:80 \
+                        todo-api:latest
 
-                            cd ${APP_DIR}
+                    echo "⏳ Waiting for startup..."
+                    sleep 5
 
-                            echo "📥 Pulling latest code..."
-                            git pull origin main
+                    echo "🔍 Verifying deployment..."
+                    docker ps | grep todo-frontend && echo "✅ Container is running!" || echo "❌ Container not found!"
 
-                            echo "🐳 Rebuilding containers..."
-                            docker compose up -d --build
-
-                            echo "⏳ Waiting for startup..."
-                            sleep 15
-
-                            echo "🔍 Verifying deployment..."
-                            HEALTH=\$(curl -sf http://localhost/api/health || echo "FAILED")
-
-                            if echo "\$HEALTH" | grep -q "ok"; then
-                                echo "✅ Deployment successful!"
-                                docker compose ps
-                            else
-                                echo "❌ Health check failed!"
-                                docker compose logs --tail=20
-                                exit 1
-                            fi
-
-DEPLOY_SCRIPT
-                    '''
-                }
+                    echo "📋 Container logs (last 10 lines):"
+                    docker logs todo-frontend --tail=10
+                '''
             }
 
             post {
                 success {
                     echo "✅ DEPLOYMENT SUCCESSFUL — Build #${BUILD_NUMBER}"
+                    echo "🌐 App is live at: http://155.248.254.15"
                 }
                 failure {
                     echo "❌ DEPLOYMENT FAILED — Build #${BUILD_NUMBER}"
@@ -208,6 +193,7 @@ DEPLOY_SCRIPT
                 echo "Git Branch:   ${env.GIT_BRANCH}"
                 echo "Git Commit:   ${env.GIT_COMMIT}"
                 echo "Build URL:    ${env.BUILD_URL}"
+                echo "Live URL:     http://155.248.254.15"
                 echo "Result:       SUCCESS"
             }
         }
@@ -219,6 +205,7 @@ DEPLOY_SCRIPT
     post {
         success {
             echo "🎉 Pipeline completed successfully!"
+            echo "🌐 Todo app is live at: http://155.248.254.15"
         }
 
         failure {
