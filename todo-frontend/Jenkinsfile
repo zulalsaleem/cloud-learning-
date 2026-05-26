@@ -260,7 +260,7 @@ DEPLOY_SCRIPT
 
         failure {
             echo "💥 Pipeline FAILED! Check logs above."
-            echo "Build URL: ${BUILD_URL}"
+            echo "Build URL: ${env.BUILD_URL}"
         }
 
         unstable {
