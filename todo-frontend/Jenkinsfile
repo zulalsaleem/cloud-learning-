@@ -44,10 +44,6 @@ pipeline {
         // Saves disk space on server!
         buildDiscarder(logRotator(numToKeepStr: '10'))
 
-        // Add timestamps to all log lines
-        // "14:23:05 Running tests..."
-        timestamps()
-
         // Don't run two builds simultaneously
         // Prevents race conditions!
         disableConcurrentBuilds()
