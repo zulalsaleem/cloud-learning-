@@ -85,49 +85,25 @@ pipeline {
             }
         }
 
-        stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo "STAGE 6: Deploying to Oracle"
-                sshagent(credentials: ['oracle-ssh-key']) {
-                    sh '''
-                        scp -o StrictHostKeyChecking=no \
-                            -r todo-frontend/dist/* \
-                            ${ORACLE_USER}@${ORACLE_HOST}:/home/ubuntu/todo-app/frontend-dist/
+stage('Deploy to Production') {
+    steps {
+        echo "STAGE 6: Deploying to Oracle"
+        sshagent(credentials: ['oracle-ssh-key']) {
+            sh '''
+                scp -o StrictHostKeyChecking=no \
+                    -r todo-frontend/dist/* \
+                    ${ORACLE_USER}@${ORACLE_HOST}:/home/ubuntu/todo-app/frontend-dist/
 
-                        ssh -o StrictHostKeyChecking=no \
-                            ${ORACLE_USER}@${ORACLE_HOST} \
-                            "cd /home/ubuntu/todo-app && docker compose restart nginx"
+                ssh -o StrictHostKeyChecking=no \
+                    ${ORACLE_USER}@${ORACLE_HOST} \
+                    "cd /home/ubuntu/todo-app && docker compose restart nginx"
 
-                        echo "Deployment complete!"
-                    '''
-                }
-            }
-            post {
-                success { echo "DEPLOYMENT SUCCESSFUL - Build #${BUILD_NUMBER}" }
-                failure { echo "DEPLOYMENT FAILED - Build #${BUILD_NUMBER}" }
-            }
-        }
-
-        stage('Summary') {
-            steps {
-                echo "STAGE 7: Summary"
-                sh '''
-                    echo "Build: ${BUILD_NUMBER}"
-                    echo "Live:  http://155.248.254.15"
-                '''
-            }
+                echo "Deployment complete!"
+            '''
         }
     }
-
     post {
-        success { echo "Pipeline completed successfully!" }
-        failure { echo "Pipeline FAILED!" }
-        always {
-            echo "Cleaning up..."
-            sh 'docker image prune -f || true'
-        }
+        success { echo "DEPLOYMENT SUCCESSFUL - Build #${BUILD_NUMBER}" }
+        failure { echo "DEPLOYMENT FAILED - Build #${BUILD_NUMBER}" }
     }
 }
